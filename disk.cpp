@@ -11,72 +11,137 @@ using namespace std;
 
 class Disk {
 
-	struct VTOC {
-		int track;
-		int sector;
+    fstream disk;
 
-		init() {
-			track = read(VTOC_OFFSET + 1);
-		}
-	};
+    Disk() {
+        disk.open("copy.dsk", ios_base::binary | ios_base::in);
+    }
 
-	VTOC s;
-	fstream disk;
+    ~Disk() {
+        disk.close();
+    }
+
+    Disk(const Disk&) = delete;
+
+    Disk& operator=(const Disk&) = delete;
 
 public:
 
-	Disk() {
-		disk.open("copy.dsk", ios_base::binary | ios_base::in);
-		s.init();
-	}
+    static int read(int size) {
+        int res = 0;
+        for (int i = 0; i < size; ++i) {
+            res = res << 8;
+            res |= getDisk().get();
+        }
+        return res;
+    }
 
-	~Disk() {
-		disk.close();
-	}
+    static fstream& getDisk() {
+        static Disk _this;
+        return _this.disk;
+    }
+};
 
-	Disk(const Disk&) = delete;
+class File {
 
-	Disk& operator=(const Disk&) = delete;
+public:
+    int flFIags;
+    int flTyp;
+    int flUsrWds;
+    int flFINum;
+    int flStBlk;
+    int flLgLen;
+    int flPyLen;
+    int flRStBlk;
+    int flRLgLen;
+    int flRPyLen;
+    int flCrDat;
+    int flMdDat;
+    int flNam;
+    string flNamS;
 
-	int read(int offset) {
-		disk.seekg(offset);
-		return disk.get();
-	}
+    int fBegin;
+    int fEnd;
 
-	/*int getNextSector(int this_sector) {
-		disk.seekg(this_sector + 1);
-		int track = disk.get();
-		int sector = disk.get();
-		return ((track * SECTOR_COUNT) + sector) * SECTOR_SIZE;
-	}
+    File(int offset) {
+        Disk::getDisk().seekg(offset);
+        flFIags  = Disk::read(1);
+        if (isValid()) {
+            flTyp    = Disk::read(1);
+            flUsrWds = Disk::read(16);
+            flFINum  = Disk::read(4);
+            flStBlk  = Disk::read(2);
+            flLgLen  = Disk::read(4);
+            flPyLen  = Disk::read(4);
+            flRStBlk = Disk::read(2);
+            flRLgLen = Disk::read(4);
+            flRPyLen = Disk::read(4);
+            flCrDat  = Disk::read(4);
+            flMdDat  = Disk::read(4);
+            flNam    = Disk::read(1);
 
-	int getName(int this_sector) {
-		disk.seekg(this_sector + 14);
-		char name[31];
-		disk.get(name, 30);
-		string s(name);
-		for (int i=0; i<30; i++) cout << name[i];
-		cout << s << endl;
-		return 0;
-	}*/
+            char *temp = new char[flNam + 1];
+            Disk::getDisk().get(temp, flNam + 1);
+            flNamS = string(temp);
+            delete temp;
 
-	void printSector(int offset, int size, int strsize) {
-		disk.seekg(offset);
-		size /= 2;
-		for (int i = 1; i <= size; ++i) {
-			cout << hex << setw(2) << setfill('0') << disk.get();
-			cout << hex << setw(2) << setfill('0') << disk.get() << " ";
-			if (!(i % strsize)) {
-				cout << endl;
-			}
-		}
-		cout << endl;
-	}
+            fBegin = offset;
+            fEnd   = fBegin + 51 + flNam;
+            if (fEnd % 2) {
+                ++fEnd;
+            }
+            printAll();
+        }
+    }
+
+    bool isValid() {
+        /*return flFIags & 0x80;*/
+        return flFIags == 0x80;
+    }
+
+    void printAll() {
+        cout << "--------------------" << endl;
+        cout << hex;
+        cout << flFIags  << endl;
+        cout << flTyp    << endl;
+        cout << flUsrWds << endl;
+        cout << flFINum  << endl;
+        cout << flStBlk  << endl;
+        cout << flLgLen  << endl;
+        cout << flPyLen  << endl;
+        cout << flRStBlk << endl;
+        cout << flRLgLen << endl;
+        cout << flRPyLen << endl;
+        cout << flCrDat  << endl;
+        cout << flMdDat  << endl;
+        cout << flNam    << endl;
+        printFileName();
+        cout << "--------------------" << endl;
+    }
+
+    void printFileName() {
+        cout << "\\" << flNamS << "\\" << endl;
+    }
 
 };
 
-int main() {
-	Disk disk;
-	disk.printSector(VTOC_OFFSET, SECTOR_SIZE, 8);
-	return 1;
+int main() {  
+    int fBegin = 128 * 16;
+    /*for(;;) {  
+        File f(fBegin);
+        if (!f.isValid()) {
+            break;
+        }
+        fBegin = f.fEnd;
+        f.printFileName();
+    }
+    File f1(fBegin + 20);
+    File f2(f1.fEnd);*/
+
+    /* SUPER FINDER!!!!!!!!!!!! */
+    for (int i = 0; i < 10000000; ++i) {
+        File f(i);
+    }
+
+    return 1;
 }
