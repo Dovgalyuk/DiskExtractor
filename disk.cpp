@@ -1,11 +1,10 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <vector>
 #include <iomanip>
 
-#define SECTOR_SIZE 256
-#define SECTOR_COUNT 16
-#define VTOC_OFFSET SECTOR_COUNT * 17 * SECTOR_SIZE
+#define FDIR_OFFSET 128 * 16
 
 using namespace std;
 
@@ -40,11 +39,42 @@ public:
         static Disk _this;
         return _this.disk;
     }
+
+    static int findFile(int offset) {
+        Disk::getDisk().seekg(offset);
+        while (!(Disk::read(1) && 0x80)) {
+            ++offset;
+        }
+        return offset;
+    }
+
+    static void volumeInfo() {
+        Disk::getDisk().seekg(64 * 16);
+        cout << hex;
+        cout << "--------------------" << endl;
+        cout << "always $D2D7                          " << Disk::read(2) << endl;
+        cout << "date and time of initialization       " << Disk::read(4) << endl;
+        cout << "date and time of last backup          " << Disk::read(4) << endl;
+        cout << "volume attributes                     " << Disk::read(2) << endl;
+        cout << "number of files in directory          " << Disk::read(2) << endl;
+        cout << "first block of directory              " << Disk::read(2) << endl;
+        cout << "length of directory in blocks         " << Disk::read(2) << endl;
+        cout << "number of allocation blocks on volume " << Disk::read(2) << endl;
+        cout << "size of allocation blocks             " << Disk::read(4) << endl;
+        cout << "number of bytes to allocate           " << Disk::read(4) << endl;
+        cout << "first allocation block in block map   " << Disk::read(2) << endl;
+        cout << "next unused file number               " << Disk::read(4) << endl;
+        cout << "number of unused allocation blocks    " << Disk::read(2) << endl;
+        cout << "length of volume name                 " << Disk::read(1) << endl;
+        cout << "characters of volume namealways $D2D7 " << Disk::read(4) << endl;
+        cout << "--------------------" << endl;
+    }
 };
 
 class File {
 
 public:
+
     int flFIags;
     int flTyp;
     int flUsrWds;
@@ -66,7 +96,7 @@ public:
     File(int offset) {
         Disk::getDisk().seekg(offset);
         flFIags  = Disk::read(1);
-        if (isValid()) {
+        if (flFIags & 0x80) {
             flTyp    = Disk::read(1);
             flUsrWds = Disk::read(16);
             flFINum  = Disk::read(4);
@@ -90,58 +120,54 @@ public:
             if (fEnd % 2) {
                 ++fEnd;
             }
-            printAll();
         }
     }
 
-    bool isValid() {
-        /*return flFIags & 0x80;*/
-        return flFIags == 0x80;
-    }
-
     void printAll() {
-        cout << "--------------------" << endl;
         cout << hex;
-        cout << flFIags  << endl;
-        cout << flTyp    << endl;
-        cout << flUsrWds << endl;
-        cout << flFINum  << endl;
-        cout << flStBlk  << endl;
-        cout << flLgLen  << endl;
-        cout << flPyLen  << endl;
-        cout << flRStBlk << endl;
-        cout << flRLgLen << endl;
-        cout << flRPyLen << endl;
-        cout << flCrDat  << endl;
-        cout << flMdDat  << endl;
-        cout << flNam    << endl;
-        printFileName();
+        cout << "--------------------" << endl;
+        cout << "flags                                   " << flFIags  << endl;
+        cout << "version number                          " << flTyp    << endl;
+        cout << "information used by the Finder          " << flUsrWds << endl;
+        cout << "file number                             " << flFINum  << endl;
+        cout << "first allocation block of data fork     " << flStBlk  << endl;
+        cout << "logical end-of-file of data fork        " << flLgLen  << endl;
+        cout << "physical end-of-file of data fork       " << flPyLen  << endl;
+        cout << "first allocation block of resource fork " << flRStBlk << endl;
+        cout << "logical end-of-file of resource fork    " << flRLgLen << endl;
+        cout << "physical end-of-file of resource fork   " << flRPyLen << endl;
+        cout << "date and time of creation               " << flCrDat  << endl;
+        cout << "date and time of last modification      " << flMdDat  << endl;
+        cout << "length of file name                     " << flNam    << endl;
         cout << "--------------------" << endl;
     }
 
     void printFileName() {
-        cout << "\\" << flNamS << "\\" << endl;
+        cout << "File name: " << flNamS << endl;
     }
 
 };
 
-int main() {  
-    int fBegin = 128 * 16;
-    /*for(;;) {  
-        File f(fBegin);
-        if (!f.isValid()) {
-            break;
-        }
-        fBegin = f.fEnd;
-        f.printFileName();
-    }
-    File f1(fBegin + 20);
-    File f2(f1.fEnd);*/
+int main() {
 
-    /* SUPER FINDER!!!!!!!!!!!! */
-    for (int i = 0; i < 10000000; ++i) {
-        File f(i);
+    Disk::getDisk().seekg(64 * 16 + 12);
+    int fileCount = Disk::read(2);
+    vector< File > files;
+
+
+    int fBegin = FDIR_OFFSET;
+    for(int i = 0; i < fileCount; ++i) { 
+        fBegin = Disk::findFile(fBegin);
+        files.emplace_back(fBegin);
+        fBegin = files.back().fEnd;
+
+        cout << "counter: " << i << endl;
+        files.back().printFileName();
+        files.back().printAll();
+        cout << endl << endl;
     }
+
+    Disk::volumeInfo();
 
     return 1;
 }
