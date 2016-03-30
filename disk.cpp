@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <iomanip>
+#include <sstream>
 
 #define LOGBLOCK_LENGTH 512
 #define ALLOCBLOCK_LENGTH LOGBLOCK_LENGTH * 2
@@ -177,26 +178,29 @@ public:
         }
     }
 
-    string printAll() {      
-        return string("--------------------") + 
-            "\nflags                                   " + to_string(flFIags)  +
-            "\nversion number                          " + to_string(flTyp)    +
-            "\ninformation used by the Finder          " + to_string(flUsrWds) +
-            "\nfile number                             " + to_string(flFINum)  +
-            "\nfirst allocation block of data fork     " + to_string(flStBlk)  +
-            "\nlogical end-of-file of data fork        " + to_string(flLgLen)  +
-            "\nphysical end-of-file of data fork       " + to_string(flPyLen)  +
-            "\nfirst allocation block of resource fork " + to_string(flRStBlk) +
-            "\nlogical end-of-file of resource fork    " + to_string(flRLgLen) +
-            "\nphysical end-of-file of resource fork   " + to_string(flRPyLen) +
-            "\ndate and time of creation               " + to_string(flCrDat)  +
-            "\ndate and time of last modification      " + to_string(flMdDat)  +
-            "\nlength of file name                     " + to_string(flNam)    +
-            "\n--------------------\n";
+    string printAll() {   
+        stringstream temp;
+        temp << hex;
+        temp << "--------------------" << endl;
+        temp << "flags                                   " << flFIags  << endl;
+        temp << "version number                          " << flTyp    << endl;
+        temp << "information used by the Finder          " << flUsrWds << endl;
+        temp << "file number                             " << flFINum  << endl;
+        temp << "first allocation block of data fork     " << flStBlk  << endl;
+        temp << "logical end-of-file of data fork        " << flLgLen  << endl;
+        temp << "physical end-of-file of data fork       " << flPyLen  << endl;
+        temp << "first allocation block of resource fork " << flRStBlk << endl;
+        temp << "logical end-of-file of resource fork    " << flRLgLen << endl;
+        temp << "physical end-of-file of resource fork   " << flRPyLen << endl;
+        temp << "date and time of creation               " << flCrDat  << endl;
+        temp << "date and time of last modification      " << flMdDat  << endl;
+        temp << "length of file name                     " << flNam    << endl;
+        temp << "--------------------" << endl;
+        return temp.str();
     }
 
     string printFileName() {
-        return string("File name: ") + flNamS + "\n";
+        return string("File name: ") + flNamS;
     }
 
     string getValidFileName() {
@@ -209,17 +213,56 @@ public:
         return temp;
     }
 
-    string saveFile() {
-        string temp = "save file: \n";
-
-        Disk::getDiskStream().seekg(Disk::getFContOffset() + (flRStBlk - 2) * ALLOCBLOCK_LENGTH);
-        for (int i = 0; i < flRLgLen; ++i) {
-            temp += (char)Disk::getDiskStream().get();
+    void saveData(fstream& out, int point) {
+        int firstOffset = Disk::getFContOffset();
+        char str[ALLOCBLOCK_LENGTH + 1];
+        while ((point != 1) && (point != 0)) {
+            Disk::getDiskStream().seekg(firstOffset + (point - 2) * ALLOCBLOCK_LENGTH);
+            Disk::getDiskStream().get(str, ALLOCBLOCK_LENGTH + 1);
+            out.write(str, ALLOCBLOCK_LENGTH + 1);    
+            point = Disk::getDisk().allocBlockMap[point - 2];
         }
-        return temp;
+    }
+
+    void saveFile(string path) {
+        if (flRStBlk != 0) {
+            fstream file(path + getValidFileName() + ".resourсe", ios_base::binary | ios_base::out);
+            if (!file.is_open()) {
+                cout << "error: file not created: " << flNamS << endl;
+            }
+            saveData(file, flRStBlk);
+            file.close();
+        }
+
+        if (flStBlk != 0) {
+            fstream file(path + getValidFileName() + ".data", ios_base::binary | ios_base::out);
+            if (!file.is_open()) {
+                cout << "error: file not created: " << flNamS << endl;
+            }
+            saveData(file, flStBlk);
+            file.close();
+        }
     }
 
 };
+
+void generInfoFile(string path, vector< File > files) {
+    fstream file(path + "Files.info", ios_base::binary | ios_base::out);
+    if (!file.is_open()) {
+        cout << "error: info-file not created: " << endl;
+    }
+
+    file << hex;
+    for (int i = 0; i < files.size(); ++i) {
+        file << files[i].printFileName() << endl;
+        file << files[i].printAll() << endl;
+        file << "firstOffset resource fork:  " << (!files[i].flRStBlk ? 0 : Disk::getFContOffset() + (files[i].flRStBlk - 2) * ALLOCBLOCK_LENGTH) << endl;
+        file << "firstOffset data fork:      " << (!files[i].flStBlk  ? 0 : Disk::getFContOffset() + (files[i].flStBlk  - 2) * ALLOCBLOCK_LENGTH) << endl;
+        file << endl << endl;
+    }
+
+    file.close();
+}
 
 int main() {
 
@@ -239,32 +282,11 @@ int main() {
 
     system("rm -r Files");
     system("mkdir Files");
-    vector< fstream > fileStreams(fileCount);
     for (int i = 0; i < fileCount; ++i) {
-        fileStreams[i].open(string("Files/") + to_string(i) + ":" + files[i].getValidFileName() + ".txt", std::fstream::out);
-        if (!fileStreams[i].is_open()) {
-            cout << "error: file not created: " << files[i].flNamS + ".txt" << endl;
-        }
-        fileStreams[i] << files[i].printAll() << endl;
-        fileStreams[i] << files[i].saveFile() << endl;
-        fileStreams[i].close();
+        files[i].saveFile("Files/");
     }
 
-
-
-
-    int q1 = Disk::getFContOffset();
-    int q2 = q1 + (files.back().flRStBlk - 2) * ALLOCBLOCK_LENGTH;
-    int q3 = q2 + files.back().flRPyLen;
-
-    cout << dec;
-    cout << "our first file   " << q1/ 16 << endl;
-    cout << "our end file     " << q2 / 16 << endl;
-    cout << "our end file end " << q3 / 16 << endl;
-    cout << "MB end file      " << (q3 + LOGBLOCK_LENGTH * 3) / 16 << endl;
-
-    Disk::getDiskStream().seekg(0, ios::end);
-    cout << "Disk size        " << Disk::getDiskStream().tellg() / 16 << endl;
+    generInfoFile("Files/", files);
 
     return 1;
 }
