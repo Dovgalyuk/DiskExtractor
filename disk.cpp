@@ -22,7 +22,7 @@ class Disk {
 
         disk.seekg(VINF_OFFSET + 16);
         drBILen    = readByte(2);
-        drNmAIBIks = readByte(2);    
+        drNmAIBIks = readByte(2);
 
         allocBlockMap.resize(drNmAIBIks);
         disk.seekg(ABMAP_OFFSET);
@@ -91,7 +91,7 @@ public:
     static void volumeInfo() {
         int temp;
 
-        Disk::getDiskStream().seekg(64 * 16);
+        Disk::getDiskStream().seekg(512 * 2);
         cout << hex;
         cout << "--------------------" << endl;
         cout << "Volume Information" << endl;
@@ -217,16 +217,22 @@ public:
         int firstOffset = Disk::getFContOffset();
         char str[ALLOCBLOCK_LENGTH + 1];
         while ((point != 1) && (point != 0)) {
-            Disk::getDiskStream().seekg(firstOffset + (point - 2) * ALLOCBLOCK_LENGTH);
-            Disk::getDiskStream().get(str, ALLOCBLOCK_LENGTH + 1);
-            out.write(str, ALLOCBLOCK_LENGTH + 1);    
+            int offset = firstOffset + (point - 2) * ALLOCBLOCK_LENGTH;
+            //cout << hex << "block " << point << " offset " << offset << "\n";
+            Disk::getDiskStream().seekg(offset);
+            Disk::getDiskStream().read(str, ALLOCBLOCK_LENGTH);
+            out.write(str, ALLOCBLOCK_LENGTH);    
+            //cout.write(str, ALLOCBLOCK_LENGTH);    
             point = Disk::getDisk().allocBlockMap[point - 2];
         }
     }
 
     void saveFile(string path) {
+        string fname;
         if (flRStBlk != 0) {
-            fstream file(path + getValidFileName() + ".resourсe", ios_base::binary | ios_base::out);
+            fname = path + getValidFileName() + ".resourсe";
+            //cout << fname << "\n";
+            fstream file(fname, ios_base::binary | ios_base::out);
             if (!file.is_open()) {
                 cout << "error: file not created: " << flNamS << endl;
             }
@@ -235,7 +241,9 @@ public:
         }
 
         if (flStBlk != 0) {
-            fstream file(path + getValidFileName() + ".data", ios_base::binary | ios_base::out);
+            fname = path + getValidFileName() + ".data";
+            //cout << fname << "\n";
+            fstream file(fname, ios_base::binary | ios_base::out);
             if (!file.is_open()) {
                 cout << "error: file not created: " << flNamS << endl;
             }
